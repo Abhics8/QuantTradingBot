@@ -16,18 +16,46 @@ def fetch_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     print("✅ Data successfully downloaded!")
     return data
 
+def clean_data(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """
+    Cleans and standardizes the historical dataframe by handling missing values
+    and ensuring the structure is consistent for our algorithm.
+    """
+    print("🧹 Inspecting and cleaning data...")
+    
+    # Check if the DataFrame has a MultiIndex (happens with newer yfinance versions)
+    if isinstance(df.columns, pd.MultiIndex):
+        close_prices = df['Close'][ticker]
+    else:
+        close_prices = df['Close']
+        
+    # Create a fresh, standardized DataFrame with only the Close column
+    cleaned_df = pd.DataFrame(index=df.index)
+    cleaned_df['Close'] = close_prices
+    
+    # Validation: Check for internal missing values (NaNs)
+    missing_count = cleaned_df['Close'].isna().sum()
+    if missing_count > 0:
+        print(f"⚠️ Found {missing_count} missing values. Forward-filling to clean...")
+        # ffill() carries the last valid price forward, so we don't invent new prices 
+        # and we don't 'look ahead' to future prices.
+        cleaned_df['Close'] = cleaned_df['Close'].ffill()
+        
+    print("✅ Data validation complete. Ready for analysis.")
+    return cleaned_df
+
 if __name__ == "__main__":
     # Parameters for testing our Day 2 code
     TICKER = "SPY"
     START_DATE = "2020-01-01"
     END_DATE = "2023-01-01"
     
-    # Call the new function
-    historical_data = fetch_data(TICKER, START_DATE, END_DATE)
+    # Fetch raw data
+    raw_data = fetch_data(TICKER, START_DATE, END_DATE)
     
-    # Print the data to verify
-    print("\n--- First 5 Rows ---")
-    print(historical_data.head())
+    # Validate and clean the data
+    ready_data = clean_data(raw_data, TICKER)
     
-    print("\n--- Last 5 Rows ---")
-    print(historical_data.tail())
+    # Print the standardized data to verify it looks clean
+    print("\n--- Cleaned Data (First 5 Rows) ---")
+    print(ready_data.head())
