@@ -44,6 +44,19 @@ def clean_data(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     print("✅ Data validation complete. Ready for analysis.")
     return cleaned_df
 
+def calculate_short_indicator(df: pd.DataFrame, window: int = 50) -> pd.DataFrame:
+    """
+    Day 4: Calculates the short-term Simple Moving Average (SMA).
+    This mathematical indicator acts as a proxy for short-term market momentum.
+    """
+    print(f"📈 Calculating {window}-day Short-Term SMA...")
+    
+    # Calculate the rolling mean using pandas vectorization
+    # min_periods=1 ensures we get values even before day 50 (e.g., day 10 is a 10-day average)
+    df['SMA_Short'] = df['Close'].rolling(window=window, min_periods=1).mean()
+    
+    return df
+
 if __name__ == "__main__":
     # Parameters for testing our Day 2 code
     TICKER = "SPY"
@@ -56,6 +69,9 @@ if __name__ == "__main__":
     # Validate and clean the data
     ready_data = clean_data(raw_data, TICKER)
     
-    # Print the standardized data to verify it looks clean
-    print("\n--- Cleaned Data (First 5 Rows) ---")
-    print(ready_data.head())
+    # Day 4: Calculate Short-Term Indicator
+    data_with_short_ma = calculate_short_indicator(ready_data, window=50)
+    
+    # Print the specific columns to verify our math
+    print(f"\n--- Short-Term MA Validation ({TICKER}) ---")
+    print(data_with_short_ma[['Close', 'SMA_Short']].tail(10))
