@@ -57,6 +57,18 @@ def calculate_short_indicator(df: pd.DataFrame, window: int = 50) -> pd.DataFram
     
     return df
 
+def calculate_long_indicator(df: pd.DataFrame, window: int = 200) -> pd.DataFrame:
+    """
+    Day 5: Calculates the long-term Simple Moving Average (SMA).
+    This mathematical indicator acts as a proxy for the overarching macroeconomic trend.
+    """
+    print(f"📈 Calculating {window}-day Long-Term SMA...")
+    
+    # Calculate the rolling mean for the Slow Window
+    df['SMA_Long'] = df['Close'].rolling(window=window, min_periods=1).mean()
+    
+    return df
+
 if __name__ == "__main__":
     # Parameters for testing our Day 2 code
     TICKER = "SPY"
@@ -72,6 +84,9 @@ if __name__ == "__main__":
     # Day 4: Calculate Short-Term Indicator
     data_with_short_ma = calculate_short_indicator(ready_data, window=50)
     
+    # Day 5: Calculate Long-Term Indicator
+    data_with_both_ma = calculate_long_indicator(data_with_short_ma, window=200)
+    
     # Print the specific columns to verify our math
-    print(f"\n--- Short-Term MA Validation ({TICKER}) ---")
-    print(data_with_short_ma[['Close', 'SMA_Short']].tail(10))
+    print(f"\n--- Moving Averages Validation ({TICKER}) ---")
+    print(data_with_both_ma[['Close', 'SMA_Short', 'SMA_Long']].tail(10))
