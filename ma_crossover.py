@@ -1,5 +1,6 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
 
 def fetch_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
@@ -69,6 +70,19 @@ def calculate_long_indicator(df: pd.DataFrame, window: int = 200) -> pd.DataFram
     
     return df
 
+def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Day 6: Generates binary trading signals based on the Moving Average Crossover.
+    1.0 = Buy / Long (Fast MA > Slow MA)
+    0.0 = Sell / Flat (Fast MA <= Slow MA)
+    """
+    print("🚦 Generating trading signals via vectorized logic...")
+    
+    # Vectorized logic: np.where performs a high-speed condition check across the entire column
+    df['Signal'] = np.where(df['SMA_Short'] > df['SMA_Long'], 1.0, 0.0)
+    
+    return df
+
 if __name__ == "__main__":
     # Parameters for testing our Day 2 code
     TICKER = "SPY"
@@ -87,6 +101,9 @@ if __name__ == "__main__":
     # Day 5: Calculate Long-Term Indicator
     data_with_both_ma = calculate_long_indicator(data_with_short_ma, window=200)
     
-    # Print the specific columns to verify our math
-    print(f"\n--- Moving Averages Validation ({TICKER}) ---")
-    print(data_with_both_ma[['Close', 'SMA_Short', 'SMA_Long']].tail(10))
+    # Day 6: Generate Trading Signals
+    data_with_signals = generate_signals(data_with_both_ma)
+    
+    # Print the specific columns to verify the signals mathematically match the MAs
+    print(f"\n--- Trading Signals Validation ({TICKER}) ---")
+    print(data_with_signals[['Close', 'SMA_Short', 'SMA_Long', 'Signal']].tail(15))
