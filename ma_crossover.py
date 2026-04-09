@@ -83,6 +83,21 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
+def identify_trades(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Day 7: Identifies the exact days a trade executes.
+    By taking the mathematical difference (.diff()) of the Signal column:
+    +1.0 = We transition from Flat to Long (Execute Buy)
+    -1.0 = We transition from Long to Flat (Execute Sell)
+     0.0 = We hold our current position
+    """
+    print("🔍 Identifying specific trade execution moments...")
+    
+    # Calculate the day-to-day discrete difference in the Signal column
+    df['Position'] = df['Signal'].diff()
+    
+    return df
+
 if __name__ == "__main__":
     # Parameters for testing our Day 2 code
     TICKER = "SPY"
@@ -104,6 +119,9 @@ if __name__ == "__main__":
     # Day 6: Generate Trading Signals
     data_with_signals = generate_signals(data_with_both_ma)
     
+    # Day 7: Identify Trade Executions
+    data_with_positions = identify_trades(data_with_signals)
+    
     # Print the specific columns to verify the signals mathematically match the MAs
-    print(f"\n--- Trading Signals Validation ({TICKER}) ---")
-    print(data_with_signals[['Close', 'SMA_Short', 'SMA_Long', 'Signal']].tail(15))
+    print(f"\n--- Trade Executions Validation ({TICKER}) ---")
+    print(data_with_positions[['Close', 'Signal', 'Position']].tail(15))
