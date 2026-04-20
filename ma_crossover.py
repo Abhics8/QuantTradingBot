@@ -107,6 +107,31 @@ def calculate_returns(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def apply_transaction_costs(df: pd.DataFrame, commission_bps: float = 10.0) -> pd.DataFrame:
+    """
+    Day 9: Subtracts realistic transaction friction from strategy returns.
+
+    Every time the Position column changes sign (a buy or sell execution),
+    we pay a cost. We model that cost as a fixed number of basis points (bps).
+    A default of 10 bps = 0.10% per trade, which is a reasonable proxy for
+    retail commission + bid-ask slippage on a liquid ETF like SPY.
+
+    Mathematically:
+        cost_today = |Position_today| * (commission_bps / 10_000)
+        net_return = gross_return - cost_today
+
+    Why .abs()? Both entries (+1) and exits (-1) cost money — we never get
+    paid to trade, so we take the absolute value before applying the penalty.
+    """
+    cost_rate = commission_bps / 10_000.0
+    print(f"💸 Applying transaction costs at {commission_bps:.1f} bps per trade...")
+
+    # Position is the diff of Signal: +1 on buys, -1 on sells, 0 when holding
+    trade_cost = df['Position'].abs() * cost_rate
+    df['Strategy_Return'] = df['Strategy_Return'] - trade_cost.fillna(0)
+
+    return df
+
 def identify_trades(df: pd.DataFrame) -> pd.DataFrame:
     """
     Day 7: Identifies the exact days a trade executes.
@@ -149,6 +174,9 @@ if __name__ == "__main__":
     # Day 8: Calculate Market and Strategy Returns
     data_with_returns = calculate_returns(data_with_positions)
 
+    # Day 9: Apply Transaction Costs (10 bps = 0.10% per trade)
+    data_net_costs = apply_transaction_costs(data_with_returns, commission_bps=10.0)
+
     # Print the specific columns to verify the signals mathematically match the MAs
     print(f"\n--- Trade Executions Validation ({TICKER}) ---")
-    print(data_with_returns[['Close', 'Signal', 'Position', 'Market_Return', 'Strategy_Return']].tail(15))
+    print(data_net_costs[['Close', 'Signal', 'Position', 'Market_Return', 'Strategy_Return']].tail(15))
