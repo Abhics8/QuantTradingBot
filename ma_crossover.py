@@ -107,6 +107,64 @@ def calculate_returns(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def compute_metrics(df: pd.DataFrame, risk_free_rate: float = 0.0) -> dict:
+    """
+    Day 11: Computes the professional backtest tear-sheet metrics.
+
+    - Total Return (%): simple percentage growth of the final equity over start.
+    - CAGR (%): annualized compounded growth rate — lets us compare strategies
+      run over different time spans on equal footing.
+    - Annualized Volatility (%): std-dev of daily returns scaled by sqrt(252),
+      the standard approximation for 252 trading days per year.
+    - Sharpe Ratio: (mean excess return / std dev) annualized. The industry
+      benchmark for risk-adjusted return. >1 is decent, >2 is strong.
+    - Max Drawdown (%): the worst peak-to-trough decline ever experienced.
+      This is often the metric that actually determines if a strategy is
+      psychologically trade-able — big drawdowns shake investors out.
+    """
+    print("📐 Computing performance tear-sheet metrics...")
+
+    strat_returns = df['Strategy_Return'].dropna()
+    strat_equity = df['Strategy_Equity'].dropna()
+
+    # --- Total + Annualized Return ---
+    total_return = strat_equity.iloc[-1] / strat_equity.iloc[0] - 1
+    years = len(strat_returns) / 252.0
+    cagr = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0.0
+
+    # --- Volatility ---
+    ann_vol = strat_returns.std() * np.sqrt(252)
+
+    # --- Sharpe Ratio ---
+    # Daily risk-free rate = annual rate / 252
+    daily_rf = risk_free_rate / 252.0
+    excess_returns = strat_returns - daily_rf
+    sharpe = (excess_returns.mean() / excess_returns.std()) * np.sqrt(252) if excess_returns.std() > 0 else 0.0
+
+    # --- Max Drawdown ---
+    # Running peak of equity curve, then percent decline below that peak.
+    running_peak = strat_equity.cummax()
+    drawdown_series = (strat_equity - running_peak) / running_peak
+    max_drawdown = drawdown_series.min()
+
+    metrics = {
+        'Total Return (%)': total_return * 100,
+        'CAGR (%)': cagr * 100,
+        'Annualized Volatility (%)': ann_vol * 100,
+        'Sharpe Ratio': sharpe,
+        'Max Drawdown (%)': max_drawdown * 100,
+    }
+    return metrics
+
+def print_metrics(metrics: dict) -> None:
+    """Pretty-prints the metrics dictionary as a readable tear-sheet."""
+    print("\n" + "=" * 42)
+    print("     STRATEGY PERFORMANCE TEAR-SHEET")
+    print("=" * 42)
+    for name, value in metrics.items():
+        print(f"  {name:<28}{value:>10.2f}")
+    print("=" * 42)
+
 def build_equity_curve(df: pd.DataFrame, starting_capital: float = 10_000.0) -> pd.DataFrame:
     """
     Day 10: Compounds daily returns into a running portfolio value ("equity curve").
@@ -215,3 +273,7 @@ if __name__ == "__main__":
     print(f"\n--- Final Verdict ---")
     print(f"Strategy ending value:  ${results['Strategy_Equity'].iloc[-1]:>12,.2f}")
     print(f"Buy-and-Hold ending:    ${results['BuyHold_Equity'].iloc[-1]:>12,.2f}")
+
+    # Day 11: Compute performance metrics tear-sheet
+    metrics = compute_metrics(results)
+    print_metrics(metrics)
