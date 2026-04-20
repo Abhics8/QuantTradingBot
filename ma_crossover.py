@@ -51,11 +51,13 @@ def calculate_short_indicator(df: pd.DataFrame, window: int = 50) -> pd.DataFram
     This mathematical indicator acts as a proxy for short-term market momentum.
     """
     print(f"📈 Calculating {window}-day Short-Term SMA...")
-    
-    # Calculate the rolling mean using pandas vectorization
-    # min_periods=1 ensures we get values even before day 50 (e.g., day 10 is a 10-day average)
-    df['SMA_Short'] = df['Close'].rolling(window=window, min_periods=1).mean()
-    
+
+    # Calculate the rolling mean using pandas vectorization.
+    # NOTE: We intentionally DO NOT use min_periods=1. If we did, day 10's
+    # "50-day SMA" would only be a 10-day average — generating premature signals
+    # and inflating early performance. NaN for the first (window-1) days is correct.
+    df['SMA_Short'] = df['Close'].rolling(window=window).mean()
+
     return df
 
 def calculate_long_indicator(df: pd.DataFrame, window: int = 200) -> pd.DataFrame:
@@ -65,8 +67,9 @@ def calculate_long_indicator(df: pd.DataFrame, window: int = 200) -> pd.DataFram
     """
     print(f"📈 Calculating {window}-day Long-Term SMA...")
     
-    # Calculate the rolling mean for the Slow Window
-    df['SMA_Long'] = df['Close'].rolling(window=window, min_periods=1).mean()
+    # Calculate the rolling mean for the Slow Window.
+    # Same reasoning as Short SMA: no min_periods=1 to avoid look-ahead bias.
+    df['SMA_Long'] = df['Close'].rolling(window=window).mean()
     
     return df
 
