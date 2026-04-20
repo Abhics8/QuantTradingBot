@@ -107,6 +107,35 @@ def calculate_returns(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def build_equity_curve(df: pd.DataFrame, starting_capital: float = 10_000.0) -> pd.DataFrame:
+    """
+    Day 10: Compounds daily returns into a running portfolio value ("equity curve").
+
+    The math is a classic geometric compounding chain:
+        equity_t = starting_capital * Π (1 + return_i)  for i = 1..t
+
+    Pandas expresses this in one line via (1 + r).cumprod().
+
+    We build TWO curves so the reader can compare them side-by-side:
+        1. Strategy_Equity  — our crossover bot, net of transaction costs
+        2. BuyHold_Equity   — a passive baseline that just holds the index
+
+    The hard truth of quant backtesting: most simple strategies fail to
+    beat buy-and-hold once realistic frictions are applied. This curve
+    is what makes that verdict visible.
+    """
+    print(f"📊 Compounding equity curve from ${starting_capital:,.0f} starting capital...")
+
+    # fillna(0) is safe here — early rows have NaN returns (before SMA warmup)
+    # and treating those days as flat (0% return) keeps the product chain valid.
+    strategy_growth = (1 + df['Strategy_Return'].fillna(0)).cumprod()
+    benchmark_growth = (1 + df['Market_Return'].fillna(0)).cumprod()
+
+    df['Strategy_Equity'] = starting_capital * strategy_growth
+    df['BuyHold_Equity'] = starting_capital * benchmark_growth
+
+    return df
+
 def apply_transaction_costs(df: pd.DataFrame, commission_bps: float = 10.0) -> pd.DataFrame:
     """
     Day 9: Subtracts realistic transaction friction from strategy returns.
@@ -177,6 +206,12 @@ if __name__ == "__main__":
     # Day 9: Apply Transaction Costs (10 bps = 0.10% per trade)
     data_net_costs = apply_transaction_costs(data_with_returns, commission_bps=10.0)
 
+    # Day 10: Compound into an equity curve (Strategy vs. Buy-and-Hold)
+    results = build_equity_curve(data_net_costs, starting_capital=10_000.0)
+
     # Print the specific columns to verify the signals mathematically match the MAs
-    print(f"\n--- Trade Executions Validation ({TICKER}) ---")
-    print(data_net_costs[['Close', 'Signal', 'Position', 'Market_Return', 'Strategy_Return']].tail(15))
+    print(f"\n--- Backtest Equity Curve ({TICKER}) ---")
+    print(results[['Close', 'Signal', 'Strategy_Equity', 'BuyHold_Equity']].tail(15))
+    print(f"\n--- Final Verdict ---")
+    print(f"Strategy ending value:  ${results['Strategy_Equity'].iloc[-1]:>12,.2f}")
+    print(f"Buy-and-Hold ending:    ${results['BuyHold_Equity'].iloc[-1]:>12,.2f}")
