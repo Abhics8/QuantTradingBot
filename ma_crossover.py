@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 def fetch_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
@@ -106,6 +107,56 @@ def calculate_returns(df: pd.DataFrame) -> pd.DataFrame:
     df['Strategy_Return'] = df['Signal'].shift(1) * df['Market_Return']
 
     return df
+
+def plot_results(df: pd.DataFrame, ticker: str, save_path: str = None) -> None:
+    """
+    Day 12: Renders a two-panel matplotlib chart summarizing the backtest.
+
+    Panel 1 (top):    Price with Short/Long SMA overlays and buy/sell markers
+                      on the exact days the strategy transitioned position.
+    Panel 2 (bottom): Strategy equity curve vs. Buy-and-Hold benchmark so
+                      outperformance (or underperformance) is visually obvious.
+    """
+    print("🎨 Rendering backtest visualization...")
+
+    fig, (ax_price, ax_equity) = plt.subplots(
+        2, 1, figsize=(14, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1]}
+    )
+
+    # --- Top panel: price + moving averages + trade markers ---
+    ax_price.plot(df.index, df['Close'], label='Close Price', color='black', linewidth=1.2)
+    ax_price.plot(df.index, df['SMA_Short'], label='50-day SMA', color='tab:blue', linewidth=1.0)
+    ax_price.plot(df.index, df['SMA_Long'], label='200-day SMA', color='tab:orange', linewidth=1.0)
+
+    # Buy = Position +1 (Flat -> Long), Sell = Position -1 (Long -> Flat)
+    buy_days = df[df['Position'] == 1.0]
+    sell_days = df[df['Position'] == -1.0]
+    ax_price.scatter(buy_days.index, buy_days['Close'],
+                     marker='^', color='green', s=110, label='Buy (Golden Cross)', zorder=5)
+    ax_price.scatter(sell_days.index, sell_days['Close'],
+                     marker='v', color='red', s=110, label='Sell (Death Cross)', zorder=5)
+
+    ax_price.set_title(f'{ticker} — Moving Average Crossover Strategy', fontsize=14, fontweight='bold')
+    ax_price.set_ylabel('Price (USD)')
+    ax_price.legend(loc='upper left')
+    ax_price.grid(alpha=0.3)
+
+    # --- Bottom panel: equity curves ---
+    ax_equity.plot(df.index, df['Strategy_Equity'],
+                   label='Strategy (net of costs)', color='tab:green', linewidth=1.6)
+    ax_equity.plot(df.index, df['BuyHold_Equity'],
+                   label='Buy & Hold benchmark', color='tab:gray', linewidth=1.2, linestyle='--')
+    ax_equity.set_title('Equity Curve Comparison', fontsize=12)
+    ax_equity.set_ylabel('Portfolio Value (USD)')
+    ax_equity.set_xlabel('Date')
+    ax_equity.legend(loc='upper left')
+    ax_equity.grid(alpha=0.3)
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=120)
+        print(f"✅ Chart saved to {save_path}")
+    plt.show()
 
 def compute_metrics(df: pd.DataFrame, risk_free_rate: float = 0.0) -> dict:
     """
@@ -277,3 +328,6 @@ if __name__ == "__main__":
     # Day 11: Compute performance metrics tear-sheet
     metrics = compute_metrics(results)
     print_metrics(metrics)
+
+    # Day 12: Visualize the whole backtest
+    plot_results(results, TICKER, save_path='backtest_result.png')
