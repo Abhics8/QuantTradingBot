@@ -1,140 +1,134 @@
 # QuantTradingBot
 
-**A fully-vectorized Python backtesting engine for a 50 / 200-day Moving Average Crossover strategy on U.S. equities — engineered with production-grade discipline around look-ahead bias, transaction costs, and risk-adjusted performance measurement.**
+**A Python program that simulates a classic stock-trading strategy on real historical market data — and measures, honestly, whether it would have made money after fees.**
 
 <p align="left">
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/pandas-vectorized-150458?logo=pandas&logoColor=white" alt="pandas">
-  <img src="https://img.shields.io/badge/NumPy-scientific-013243?logo=numpy&logoColor=white" alt="NumPy">
-  <img src="https://img.shields.io/badge/Matplotlib-visualization-11557C" alt="Matplotlib">
+  <img src="https://img.shields.io/badge/pandas-data%20analysis-150458?logo=pandas&logoColor=white" alt="pandas">
+  <img src="https://img.shields.io/badge/NumPy-math-013243?logo=numpy&logoColor=white" alt="NumPy">
+  <img src="https://img.shields.io/badge/Matplotlib-charts-11557C" alt="Matplotlib">
   <img src="https://img.shields.io/badge/yfinance-market%20data-8A2BE2" alt="yfinance">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
 ---
 
-## Headline Results — SPY, 2020-01-01 → 2023-01-01
+## The Idea in One Paragraph
 
-Starting capital **$10,000**. Transaction costs **10 bps per execution** (retail-realistic).
-
-| Metric                  | Strategy    | Buy & Hold   |
-| ----------------------- | ----------- | ------------ |
-| Ending Equity           | **$12,731.85** | $12,348.60 |
-| Total Return            | **+27.32%**   | +23.49%    |
-| CAGR                    | **+8.40%**    | +7.29%     |
-| Annualized Volatility   | **10.36%**    | 22.05%     |
-| **Sharpe Ratio**        | **0.83**      | 0.35       |
-| **Max Drawdown**        | **-12.87%**   | -33.72%    |
-
-> The strategy extracts the bulk of the market's upside while side-stepping the 2022 drawdown — cutting peak-to-trough pain by more than half and more than doubling the risk-adjusted return (Sharpe). Raw return is comparable to buy-and-hold; the alpha is in the risk profile.
+The strategy is simple and famous: follow two moving averages of the stock's price — a fast one (50 days) that reacts to recent moves, and a slow one (200 days) that shows the long-term trend. When the fast line rises above the slow line, it's a sign momentum is turning up, so the program buys. When it falls back below, the program sells and sits in cash. The aim is not to beat the market's raw return, but to sidestep the worst crashes while still capturing most of the upside.
 
 ---
 
-## Methodology
+## How It Performed on the S&P 500 (2020–2022)
 
-The engine is built as a composable, vectorized pipeline. Each stage is a pure function that takes a DataFrame and returns a DataFrame with new columns appended — making every intermediate step inspectable and unit-testable.
+Starting with **$10,000** and paying a small, realistic trading fee each time it bought or sold:
 
-```
-fetch_data  →  clean_data  →  calculate_short_indicator  →  calculate_long_indicator
-           →  generate_signals  →  identify_trades  →  calculate_returns
-           →  apply_transaction_costs  →  build_equity_curve
-           →  compute_metrics  →  plot_results
-```
+| What we measured            | The strategy   | Just holding the market |
+| --------------------------- | -------------- | ----------------------- |
+| Ending balance              | **$12,732**    | $12,349                 |
+| Total growth                | **+27%**       | +23%                    |
+| Growth per year (avg.)      | **+8.4%**      | +7.3%                   |
+| Worst drop from a high      | **-13%**       | -34%                    |
+| Risk-adjusted score¹        | **0.83**       | 0.35                    |
 
-### Signal Generation
-* **Fast window:** 50-day Simple Moving Average
-* **Slow window:** 200-day Simple Moving Average
-* **Long entry (Golden Cross):** fast SMA crosses *above* slow SMA
-* **Flat exit (Death Cross):** fast SMA crosses *below* slow SMA
-* No leverage, no shorting, no intraday exposure — a single binary {0, 1} position vector.
+> The headline result isn't the extra few percent of profit. It's the **worst drop cut from -34% down to -13%** — a much smoother ride for a comparable return. A dollar of profit earned while avoiding a stomach-churning drawdown is, to most investors, worth more than a dollar earned through one.
 
-### Risk & Return
-* Daily returns computed as `pct_change()` on closing prices.
-* Strategy P&L is `Signal.shift(1) * Market_Return` — the `shift(1)` is deliberate: signals are derived from the closing print, so the earliest executable fill is the *next* session's open.
-* Equity compounded geometrically via `(1 + r).cumprod()`.
-
-### Performance Metrics
-Sharpe ratio is annualized with `√252`. Max drawdown is computed from the running cumulative-max of the strategy equity curve. All metrics are computed from post-cost returns.
+<sub>¹ A standard measure of how much return you're getting for the risk you're taking. Higher is better; above 1.0 is generally considered strong.</sub>
 
 ---
 
-## Engineering Principles
+## How the Program Works
 
-This project was built to demonstrate *how* a backtest is written, not just *what* it returns. Three disciplines drive the codebase:
+The code is organized as a straight pipeline — each step is one small, readable function:
 
-### 1. Zero look-ahead bias
-Both the signal-vs-return alignment (`shift(1)`) and the SMA rolling windows (no `min_periods=1`) are structured so the strategy cannot use any information it would not have had in real time. A NaN prefix on the first 199 days is retained as correct behavior — *not* patched away.
+1. **Download** three years of daily prices for the chosen stock or index.
+2. **Clean** the data (fill in missing days, standardize the format).
+3. **Calculate** the 50-day and 200-day moving averages.
+4. **Generate signals** — mark each day as either "in the market" or "in cash."
+5. **Simulate trading** — track what would have happened day by day.
+6. **Subtract fees** so the result reflects what an ordinary investor would actually keep.
+7. **Measure performance** — growth rate, volatility, worst loss, risk-adjusted return.
+8. **Plot** the result as a two-panel chart.
 
-### 2. Realistic frictions
-Transaction costs are modeled explicitly as a basis-point charge on every position change (`|ΔPosition|`). Default is 10 bps, which approximates retail commission plus typical bid-ask slippage on a liquid ETF. Infinite-liquidity, zero-cost backtests are rejected on principle — they inflate returns in a way that rarely survives live trading.
-
-### 3. Vectorization over iteration
-Every transformation is expressed as a column operation on the full price series rather than a Python `for` loop. The full SPY backtest runs end-to-end in well under a second, and the same codebase would scale to a basket of 500 tickers without structural change.
-
----
-
-## Visual Output
-
-Running `python ma_crossover.py` renders a two-panel summary chart (`backtest_result.png`):
-
-* **Top panel** — close price overlaid with the 50/200-day SMAs, annotated with green ▲ markers on Golden Cross entries and red ▼ markers on Death Cross exits.
-* **Bottom panel** — strategy equity curve (net of costs) plotted against the buy-and-hold benchmark so outperformance is visually immediate.
+Running `python ma_crossover.py` executes all of this in under a second.
 
 ---
 
-## Getting Started
+## What Sets This Project Apart
+
+Plenty of tutorials walk through a simple backtest. This one goes further on three fronts that matter if you want the numbers to be trustworthy:
+
+### 1. No cheating with hindsight
+A surprisingly common mistake in amateur backtests is letting the simulated trader "see" today's price before deciding whether to buy it. This project is carefully structured so the trader only ever acts on information that would have been available in real time — the same rule a real broker would enforce.
+
+### 2. Honest about fees
+Every time a real investor buys or sells, they pay a small cost (broker commission plus the gap between bid and ask prices). The simulation applies that same cost on every trade, so the final number reflects what would actually land in your pocket — not an idealized figure that ignores friction.
+
+### 3. Fast and clean code
+The math runs on entire price histories at once rather than day-by-day loops, which is why it's quick and why the same codebase could scale to hundreds of stocks with no structural changes.
+
+---
+
+## What the Output Looks Like
+
+Each run produces a chart (`backtest_result.png`) with two panels:
+
+* **Top:** the stock's price, overlaid with the 50-day and 200-day moving averages. Green triangles mark every day the program bought; red triangles mark every day it sold.
+* **Bottom:** a side-by-side comparison of the strategy's portfolio value against a simple "buy and hold" baseline, so the difference is visible at a glance.
+
+---
+
+## Running It Yourself
 
 ```bash
-# 1. Clone
+# 1. Download the code
 git clone https://github.com/Abhics8/QuantTradingBot.git
 cd QuantTradingBot
 
-# 2. Virtual environment
+# 2. Set up an isolated Python environment
 python3 -m venv venv
 source venv/bin/activate         # Windows: venv\Scripts\activate
 
-# 3. Install dependencies
+# 3. Install the libraries it depends on
 pip install -r requirements.txt
 
 # 4. Run the backtest
 python ma_crossover.py
 ```
 
-The default run targets SPY from 2020-01-01 to 2023-01-01. Change the `TICKER`, `START_DATE`, and `END_DATE` constants in `__main__` to rerun on any other symbol or window.
+The default run is the S&P 500 index (ticker: `SPY`) from 2020 through 2022. To test it on any other stock or date range, edit the `TICKER`, `START_DATE`, and `END_DATE` values at the bottom of `ma_crossover.py`.
 
 ---
 
-## Project Structure
+## Project Files
 
 ```
 QuantTradingBot/
-├── ma_crossover.py       # End-to-end vectorized backtest engine
-├── requirements.txt      # yfinance, pandas, numpy, matplotlib
-├── backtest_result.png   # Generated on each run
-└── README.md
+├── ma_crossover.py       # The entire backtest program
+├── requirements.txt      # List of Python libraries needed
+├── backtest_result.png   # Chart produced each time you run it
+└── README.md             # This file
 ```
 
 ---
 
-## Known Limitations
+## Things It Doesn't Do (Yet)
 
-A deliberately honest list — each of these is a candidate for the next iteration of the engine:
+Part of building something credible is being clear about what it isn't:
 
-* **Single-asset, long-only.** No portfolio construction, no shorting, no leverage.
-* **Execution model is simplified.** The shift-by-one-day assumption treats the next open as perfectly fillable at the prior close — no gap risk, no partial fills.
-* **Transaction costs are a flat bps.** Real costs are a function of order size, venue, and liquidity regime.
-* **No parameter optimization / walk-forward validation.** The 50/200 windows are canonical but have not been cross-validated out-of-sample, which means the reported metrics have not been hardened against overfitting.
-* **No benchmark for risk-free rate.** Sharpe is computed with `rf = 0`. Using a rolling T-Bill yield would be more rigorous.
+* **Only one stock at a time.** A real portfolio would hold many stocks, weighted thoughtfully.
+* **Only goes long.** The program buys or sits in cash — it never bets against a falling market.
+* **Simplified trading assumptions.** It assumes every trade can be executed at the previous day's closing price, which is close to, but not exactly, how a real broker would fill the order.
+* **No guarantee the 50/200 numbers are optimal.** These are the textbook defaults. A more rigorous version would test many combinations on historical data and verify the winner holds up on a *different* period it hasn't seen before.
 
 ---
 
-## Roadmap
+## What's Next
 
-* Multi-asset portfolio backtesting with configurable weights
-* Walk-forward parameter optimization (grid search over fast/slow windows)
-* Additional signal families: mean-reversion, volatility breakout, pairs / cointegration
-* HTML tear-sheet export (drawdown curves, rolling Sharpe, monthly return heatmap)
-* Live paper-trading adapter via the Alpaca API
+* Testing the strategy across multiple stocks as a portfolio
+* Trying other well-known strategies (mean-reversion, volatility breakouts)
+* Producing a polished one-page performance report
+* Connecting to a free paper-trading service to run it live without real money
 
 ---
 
@@ -142,8 +136,8 @@ A deliberately honest list — each of these is a candidate for the next iterati
 
 **AB0204** — [github.com/Abhics8](https://github.com/Abhics8)
 
-Built as part of a structured, multi-week exploration of quantitative trading fundamentals: from raw price ingestion through to risk-adjusted performance reporting. Feedback, issues, and pull requests are welcome.
+Built as part of a structured, multi-week project to learn quantitative trading from the ground up — starting with raw price data and ending with a real performance report. Feedback, questions, and contributions are welcome.
 
 ---
 
-<sub>This project is for educational and research purposes only. Nothing in this repository constitutes investment advice or a solicitation to trade any financial instrument. Past performance — backtested or otherwise — is not indicative of future results.</sub>
+<sub>This project is for learning and research only. It is not investment advice, and the fact that a strategy worked in the past is not a promise it will work in the future.</sub>
