@@ -86,6 +86,27 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
+def calculate_returns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Day 8: Calculates daily percentage returns for both the underlying market
+    (buy-and-hold benchmark) and our crossover strategy.
+
+    CRITICAL: We shift the Signal by 1 day before multiplying by market returns.
+    The reasoning is causal — today's signal is generated from today's closing
+    price, so the earliest we could actually act on it is TOMORROW's open.
+    Multiplying today's signal by today's return would leak future information
+    into the present, which is a classic backtesting sin.
+    """
+    print("💰 Calculating daily market and strategy returns...")
+
+    # Daily percentage change of the close price = buy-and-hold return
+    df['Market_Return'] = df['Close'].pct_change()
+
+    # Strategy return = yesterday's position decision * today's realized return
+    df['Strategy_Return'] = df['Signal'].shift(1) * df['Market_Return']
+
+    return df
+
 def identify_trades(df: pd.DataFrame) -> pd.DataFrame:
     """
     Day 7: Identifies the exact days a trade executes.
@@ -124,7 +145,10 @@ if __name__ == "__main__":
     
     # Day 7: Identify Trade Executions
     data_with_positions = identify_trades(data_with_signals)
-    
+
+    # Day 8: Calculate Market and Strategy Returns
+    data_with_returns = calculate_returns(data_with_positions)
+
     # Print the specific columns to verify the signals mathematically match the MAs
     print(f"\n--- Trade Executions Validation ({TICKER}) ---")
-    print(data_with_positions[['Close', 'Signal', 'Position']].tail(15))
+    print(data_with_returns[['Close', 'Signal', 'Position', 'Market_Return', 'Strategy_Return']].tail(15))
