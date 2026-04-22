@@ -2,6 +2,8 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import contextlib
+import io
 
 def fetch_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
@@ -285,49 +287,209 @@ def identify_trades(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
+def run_backtest(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    fast_window: int = 50,
+    slow_window: int = 200,
+    commission_bps: float = 10.0,
+    starting_capital: float = 10_000.0,
+    precleaned_data: pd.DataFrame = None,
+) -> tuple:
+    """
+    Day 13: One-shot backtest runner that threads the full pipeline end-to-end
+    for a given (ticker, date range, fast/slow window, cost) configuration.
+
+    Returns (results_df, metrics_dict) so callers can either plot the result,
+    dump it to a CSV, or aggregate many runs into a parameter sweep.
+
+    Passing `precleaned_data` lets callers reuse a single download across many
+    runs — a meaningful speedup when sweeping dozens of parameter combos.
+    """
+    if precleaned_data is None:
+        raw = fetch_data(ticker, start_date, end_date)
+        data = clean_data(raw, ticker)
+    else:
+        data = precleaned_data.copy()
+
+    data = calculate_short_indicator(data, window=fast_window)
+    data = calculate_long_indicator(data, window=slow_window)
+    data = generate_signals(data)
+    data = identify_trades(data)
+    data = calculate_returns(data)
+    data = apply_transaction_costs(data, commission_bps=commission_bps)
+    data = build_equity_curve(data, starting_capital=starting_capital)
+    metrics = compute_metrics(data)
+    return data, metrics
+
+
+def parameter_sweep(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    fast_windows: list,
+    slow_windows: list,
+    commission_bps: float = 10.0,
+    metric: str = 'Sharpe Ratio',
+) -> pd.DataFrame:
+    """
+    Day 13: Runs the backtest across every (fast, slow) pair in the grid and
+    returns a matrix of the chosen metric (Sharpe by default).
+
+    WHY THIS MATTERS — AND WHY IT IS ALSO DANGEROUS:
+    A single backtest result (e.g. Sharpe 0.83 at 50/200) is one point in
+    parameter space. It could be genuinely robust, or it could be a lucky
+    local maximum that will break as soon as the future looks a little
+    different. The sweep lets us see the whole terrain at once — if the
+    neighbours of 50/200 also look good, we have some confidence the
+    strategy is stable. If 50/200 is an isolated green dot in a sea of red,
+    we have almost certainly overfit.
+
+    IMPORTANT: This is still in-sample optimization. Picking the best cell
+    from the heatmap and declaring victory is how amateurs get burned. A
+    rigorous workflow would split the data, optimize on the first half, and
+    then report the *unseen* second-half performance of the winning params.
+    That walk-forward step is flagged in the roadmap.
+
+    Only (fast < slow) combinations are evaluated. All noisy print output
+    from the inner pipeline is suppressed so the sweep stays readable.
+    """
+    print(f"🔬 Running parameter sweep: "
+          f"{len(fast_windows)} fast × {len(slow_windows)} slow windows "
+          f"on {ticker} ({start_date} → {end_date})")
+
+    # Download once, reuse across every run in the grid.
+    raw = fetch_data(ticker, start_date, end_date)
+    base = clean_data(raw, ticker)
+
+    sweep = pd.DataFrame(index=fast_windows, columns=slow_windows, dtype=float)
+    sweep.index.name = 'Fast window'
+    sweep.columns.name = 'Slow window'
+
+    total = sum(1 for f in fast_windows for s in slow_windows if f < s)
+    done = 0
+    for fast in fast_windows:
+        for slow in slow_windows:
+            if fast >= slow:
+                continue  # nonsensical: fast must be strictly shorter than slow
+            # Silence the inner pipeline's chatty print() calls for one clean run.
+            with contextlib.redirect_stdout(io.StringIO()):
+                _, metrics = run_backtest(
+                    ticker, start_date, end_date,
+                    fast_window=fast, slow_window=slow,
+                    commission_bps=commission_bps,
+                    precleaned_data=base,
+                )
+            sweep.loc[fast, slow] = metrics[metric]
+            done += 1
+            print(f"   [{done:>2}/{total}] fast={fast:>3}  slow={slow:>3}  "
+                  f"{metric}={metrics[metric]:>6.2f}")
+
+    return sweep
+
+
+def plot_sweep_heatmap(
+    sweep_df: pd.DataFrame,
+    ticker: str,
+    metric_name: str = 'Sharpe Ratio',
+    save_path: str = None,
+) -> None:
+    """
+    Day 13: Renders the parameter sweep as a colored heatmap.
+
+    Red = bad, green = good. Each cell is annotated with its numeric value
+    so the reader can compare exact numbers, not just colors. Cells where
+    fast >= slow are greyed out with NaN (there is no such thing as a
+    crossover if the fast window is the same length or longer than the slow).
+    """
+    fig, ax = plt.subplots(figsize=(11, 7))
+
+    data = sweep_df.values.astype(float)
+    im = ax.imshow(data, aspect='auto', cmap='RdYlGn', origin='lower')
+
+    ax.set_xticks(range(len(sweep_df.columns)))
+    ax.set_xticklabels(sweep_df.columns)
+    ax.set_yticks(range(len(sweep_df.index)))
+    ax.set_yticklabels(sweep_df.index)
+
+    ax.set_xlabel('Slow SMA window (days)', fontsize=11)
+    ax.set_ylabel('Fast SMA window (days)', fontsize=11)
+    ax.set_title(
+        f'{ticker} — {metric_name} across SMA window combinations\n'
+        f'(higher = better; blank cells are invalid where fast ≥ slow)',
+        fontsize=12, fontweight='bold'
+    )
+
+    # Annotate each cell with its numeric value for precise reading.
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            val = data[i, j]
+            if not np.isnan(val):
+                ax.text(j, i, f'{val:.2f}', ha='center', va='center',
+                        fontsize=10, color='black')
+
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label(metric_name)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=120)
+        print(f"✅ Heatmap saved to {save_path}")
+    plt.show()
+
+
 if __name__ == "__main__":
-    # Parameters for testing our Day 2 code
     TICKER = "SPY"
     START_DATE = "2020-01-01"
     END_DATE = "2023-01-01"
-    
-    # Fetch raw data
-    raw_data = fetch_data(TICKER, START_DATE, END_DATE)
-    
-    # Validate and clean the data
-    ready_data = clean_data(raw_data, TICKER)
-    
-    # Day 4: Calculate Short-Term Indicator
-    data_with_short_ma = calculate_short_indicator(ready_data, window=50)
-    
-    # Day 5: Calculate Long-Term Indicator
-    data_with_both_ma = calculate_long_indicator(data_with_short_ma, window=200)
-    
-    # Day 6: Generate Trading Signals
-    data_with_signals = generate_signals(data_with_both_ma)
-    
-    # Day 7: Identify Trade Executions
-    data_with_positions = identify_trades(data_with_signals)
 
-    # Day 8: Calculate Market and Strategy Returns
-    data_with_returns = calculate_returns(data_with_positions)
+    # ──────────────────────────────────────────────────────────────────
+    # Part 1: Classic 50/200 crossover backtest (Days 1–12)
+    # ──────────────────────────────────────────────────────────────────
+    results, metrics = run_backtest(
+        ticker=TICKER,
+        start_date=START_DATE,
+        end_date=END_DATE,
+        fast_window=50,
+        slow_window=200,
+        commission_bps=10.0,
+        starting_capital=10_000.0,
+    )
 
-    # Day 9: Apply Transaction Costs (10 bps = 0.10% per trade)
-    data_net_costs = apply_transaction_costs(data_with_returns, commission_bps=10.0)
-
-    # Day 10: Compound into an equity curve (Strategy vs. Buy-and-Hold)
-    results = build_equity_curve(data_net_costs, starting_capital=10_000.0)
-
-    # Print the specific columns to verify the signals mathematically match the MAs
     print(f"\n--- Backtest Equity Curve ({TICKER}) ---")
-    print(results[['Close', 'Signal', 'Strategy_Equity', 'BuyHold_Equity']].tail(15))
+    print(results[['Close', 'Signal', 'Strategy_Equity', 'BuyHold_Equity']].tail(10))
     print(f"\n--- Final Verdict ---")
     print(f"Strategy ending value:  ${results['Strategy_Equity'].iloc[-1]:>12,.2f}")
     print(f"Buy-and-Hold ending:    ${results['BuyHold_Equity'].iloc[-1]:>12,.2f}")
 
-    # Day 11: Compute performance metrics tear-sheet
-    metrics = compute_metrics(results)
     print_metrics(metrics)
-
-    # Day 12: Visualize the whole backtest
     plot_results(results, TICKER, save_path='backtest_result.png')
+
+    # ──────────────────────────────────────────────────────────────────
+    # Part 2 (Day 13): Parameter sweep across fast/slow SMA combinations
+    # ──────────────────────────────────────────────────────────────────
+    FAST_WINDOWS = [10, 20, 30, 40, 50, 60]
+    SLOW_WINDOWS = [100, 150, 200, 250]
+
+    sweep = parameter_sweep(
+        ticker=TICKER,
+        start_date=START_DATE,
+        end_date=END_DATE,
+        fast_windows=FAST_WINDOWS,
+        slow_windows=SLOW_WINDOWS,
+        metric='Sharpe Ratio',
+    )
+
+    print("\n--- Parameter Sweep Results (Sharpe Ratio) ---")
+    print(sweep.round(2))
+
+    # Flag the single best combo — with the caveat that picking it on
+    # in-sample data is exactly how overfitting happens.
+    best = sweep.stack().idxmax()
+    best_value = sweep.stack().max()
+    print(f"\nHighest in-sample Sharpe: {best_value:.2f} at fast={best[0]}, slow={best[1]}")
+    print("(Treat with caution — this is in-sample optimization.)")
+
+    plot_sweep_heatmap(sweep, TICKER, metric_name='Sharpe Ratio',
+                       save_path='parameter_sweep.png')
