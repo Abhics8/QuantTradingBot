@@ -1,3 +1,15 @@
+"""
+QuantTradingBot — Moving Average Crossover Backtester
+=====================================================
+A complete, end-to-end quantitative trading backtesting engine that simulates
+a Moving Average Crossover strategy on historical market data, applies realistic
+transaction costs, and evaluates performance via a professional tear-sheet
+and parameter sensitivity analysis.
+
+Author:  Abhics8 (https://github.com/Abhics8)
+License: MIT
+"""
+
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -440,7 +452,8 @@ def plot_sweep_heatmap(
 
 
 if __name__ == "__main__":
-    TICKER = "SPY"
+    # ── Configuration ────────────────────────────────────────────────
+    TICKER = "SPY"           # S&P 500 ETF proxy
     START_DATE = "2020-01-01"
     END_DATE = "2023-01-01"
 

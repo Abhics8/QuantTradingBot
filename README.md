@@ -8,6 +8,7 @@
   <img src="https://img.shields.io/badge/NumPy-math-013243?logo=numpy&logoColor=white" alt="NumPy">
   <img src="https://img.shields.io/badge/Matplotlib-charts-11557C" alt="Matplotlib">
   <img src="https://img.shields.io/badge/yfinance-market%20data-8A2BE2" alt="yfinance">
+  <img src="https://img.shields.io/badge/Status-Completed-brightgreen" alt="Status">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
@@ -162,7 +163,7 @@ Part of building something credible is being clear about what it isn't:
 
 ## Author
 
-**AB0204** — [github.com/Abhics8](https://github.com/Abhics8)
+**Abhics8** — [github.com/Abhics8](https://github.com/Abhics8)
 
 Built as part of a structured, multi-week project to learn quantitative trading from the ground up — starting with raw price data and ending with a real performance report. Feedback, questions, and contributions are welcome.
 
