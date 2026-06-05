@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>📈 QuantTradingBot (v2.0)</h1>
+  <h1>📈 QuantTradingBot</h1>
   <p><b>Machine Learning-Powered Quantitative Trading Research Platform</b></p>
 
   [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)](https://www.python.org/)
@@ -15,7 +15,7 @@
 
 QuantTradingBot is an end-to-end quantitative trading backtesting engine and research platform. 
 
-Initially built as a simple Moving Average Crossover tutorial, **v2.0** introduces a robust machine learning pipeline capable of predicting next-day returns using tree-based models and deep neural networks, wrapped in an interactive Streamlit dashboard.
+Initially built as a simple Moving Average Crossover tutorial, this project introduces a robust machine learning pipeline capable of predicting next-day returns using tree-based models and deep neural networks, wrapped in an interactive Streamlit dashboard.
 
 ### Key Capabilities
 

@@ -668,7 +668,7 @@ def main():
     st.markdown(
         "<div style='text-align: center; color: #8b949e; padding: 1rem;'>"
         "Built by <a href='https://github.com/Abhics8' style='color: #58a6ff;'>Abhics8</a> "
-        "| QuantTradingBot v2.0 | "
+        "| QuantTradingBot | "
         "<a href='https://github.com/Abhics8/QuantTradingBot' style='color: #58a6ff;'>GitHub</a>"
         "</div>",
         unsafe_allow_html=True,
