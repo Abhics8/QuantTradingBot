@@ -490,7 +490,7 @@ def main():
 
     if active.get("rsi"):
         with st.spinner("⚡ Running RSI Momentum..."):
-            strategy = RSIMomentum(rsi_period=14, oversold=30.0, overbought=70.0)
+            strategy = RSIMomentum(rsi_period=14, entry_level=55.0, exit_level=45.0)
             res, met = run_strategy_backtest(strategy, data,
                                              config["commission"], config["capital"])
             results_dict[strategy.name] = (res, met)

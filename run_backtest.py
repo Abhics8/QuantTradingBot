@@ -195,7 +195,7 @@ Examples:
         elif strat_name == "bollinger":
             strategies.append(BollingerMeanReversion(window=20, num_std=2.0))
         elif strat_name == "rsi":
-            strategies.append(RSIMomentum(rsi_period=14, oversold=30.0, overbought=70.0))
+            strategies.append(RSIMomentum(rsi_period=14, entry_level=55.0, exit_level=45.0))
         elif strat_name in ("xgboost", "lstm"):
             ml_strat = build_ml_strategy(strat_name, data, feature_cols,
                                          fast_mode=args.fast_mode)

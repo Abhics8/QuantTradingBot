@@ -69,7 +69,7 @@ class LSTMSignalModel:
         y_vals = y.values
         
         # Create sequences
-        X_seq, y_seq = _create_sequences(self, X_scaled, y_vals)
+        X_seq, y_seq = self._create_sequences(X_scaled, y_vals)
         
         # Convert to tensors
         X_tensor = torch.FloatTensor(X_seq).to(self.device)
@@ -126,19 +126,6 @@ class LSTMSignalModel:
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         probs = self.predict_proba(X)
         return (probs > 0.5).astype(float)
-
-
-# Helper function moved outside class scope to avoid 'self' passing issues inside fit()
-def _create_sequences(model_instance, data: np.ndarray, labels: np.ndarray = None):
-    X_seq, y_seq = [], []
-    for i in range(len(data) - model_instance.seq_length + 1):
-        X_seq.append(data[i:(i + model_instance.seq_length)])
-        if labels is not None:
-            y_seq.append(labels[i + model_instance.seq_length - 1])
-            
-    if labels is not None:
-        return np.array(X_seq), np.array(y_seq)
-    return np.array(X_seq)
 
 
 class LSTMStrategy(Strategy):

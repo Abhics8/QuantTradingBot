@@ -48,35 +48,68 @@ class PortfolioOptimizer:
         }
         
     def efficient_frontier(self, returns_dict: dict, n_points: int = 50) -> pd.DataFrame:
-        """Calculate the efficient frontier."""
-        # A simplified approximation
+        """
+        Compute the TRUE Markowitz efficient frontier: for a grid of target
+        returns, solve for the minimum-variance portfolio achieving each target
+        (weights sum to 1, long-only). Returns (Return, Volatility, Sharpe)
+        points tracing the frontier.
+        """
         df = pd.DataFrame(returns_dict).dropna()
         if df.empty:
             return pd.DataFrame()
-            
+
         mean_returns = df.mean() * 252
         cov_matrix = df.cov() * 252
         num_assets = len(df.columns)
-        
-        results = []
-        for _ in range(n_points):
-            # Random portfolio generation
-            weights = np.random.random(num_assets)
-            weights /= np.sum(weights)
-            
-            port_return = np.sum(mean_returns * weights)
-            port_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
-            sharpe = (port_return - self.risk_free_rate) / port_volatility
-            
-            res = {
-                'Return': port_return,
-                'Volatility': port_volatility,
-                'Sharpe': sharpe
-            }
-            res.update({name: w for name, w in zip(df.columns, weights)})
-            results.append(res)
-            
-        return pd.DataFrame(results)
+        bounds = tuple((0, 1) for _ in range(num_assets))
+        x0 = num_assets * [1.0 / num_assets]
+
+        def portfolio_vol(w):
+            return np.sqrt(np.dot(w.T, np.dot(cov_matrix, w)))
+
+        targets = np.linspace(mean_returns.min(), mean_returns.max(), n_points)
+        frontier = []
+        for target in targets:
+            constraints = (
+                {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},
+                {'type': 'eq', 'fun': lambda w, t=target: np.sum(mean_returns * w) - t},
+            )
+            res = minimize(portfolio_vol, x0, method='SLSQP', bounds=bounds, constraints=constraints)
+            if res.success:
+                vol = float(res.fun)
+                frontier.append({
+                    'Return': float(target),
+                    'Volatility': vol,
+                    'Sharpe': (float(target) - self.risk_free_rate) / vol if vol > 0 else 0.0,
+                })
+        return pd.DataFrame(frontier)
+
+    def random_portfolios(self, returns_dict: dict, n_portfolios: int = 5000, seed: int = 42) -> pd.DataFrame:
+        """
+        Monte Carlo cloud of random long-only portfolios, for plotting against
+        the efficient frontier. This is NOT the frontier itself — that's
+        `efficient_frontier()`.
+        """
+        df = pd.DataFrame(returns_dict).dropna()
+        if df.empty:
+            return pd.DataFrame()
+
+        rng = np.random.default_rng(seed)
+        mean_returns = df.mean() * 252
+        cov_matrix = df.cov() * 252
+        num_assets = len(df.columns)
+
+        rows = []
+        for _ in range(n_portfolios):
+            w = rng.random(num_assets)
+            w /= w.sum()
+            ret = float(np.sum(mean_returns * w))
+            vol = float(np.sqrt(np.dot(w.T, np.dot(cov_matrix, w))))
+            row = {'Return': ret, 'Volatility': vol,
+                   'Sharpe': (ret - self.risk_free_rate) / vol if vol > 0 else 0.0}
+            row.update({name: float(x) for name, x in zip(df.columns, w)})
+            rows.append(row)
+        return pd.DataFrame(rows)
         
     def equal_weight(self, returns_dict: dict) -> dict:
         """Simple 1/N equal weight allocation."""
